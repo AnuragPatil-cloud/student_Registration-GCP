@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: student-registration
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/AnuragPatil-cloud/student_Registration-GCP.git
+    targetRevision: main
+    path: helm/student-registration
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: student-registration
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # Don't fail the whole sync if the PodMonitoring CRD is missing (managed collection disabled)
+      - SkipDryRunOnMissingResource=true
