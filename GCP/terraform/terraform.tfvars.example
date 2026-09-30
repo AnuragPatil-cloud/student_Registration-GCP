@@ -1,0 +1,42 @@
+# Copy to terraform.tfvars and edit. terraform.tfvars is gitignored - never commit it.
+
+project_id = "YOUR_GCP_PROJECT_ID"
+region     = "asia-south1"
+zone       = "asia-south1-a"
+
+project_name = "student-registration"
+environment  = "dev"
+
+# Your current public IP, e.g. 49.37.123.45/32   (curl -s ifconfig.me)
+admin_cidr     = "YOUR_PUBLIC_IP/32"
+enable_iap_ssh = true
+
+# Jenkins + SonarQube VM
+jenkins_machine_type = "e2-standard-2"
+jenkins_disk_size    = 40
+
+# GKE
+gke_machine_type    = "e2-standard-2"
+gke_initial_nodes   = 2
+gke_min_nodes       = 1
+gke_max_nodes       = 3
+gke_node_disk_size  = 40
+gke_release_channel = "REGULAR"
+
+# Cloud SQL for MySQL
+sql_database_version      = "MYSQL_8_4"
+sql_tier                  = "db-g1-small"
+sql_disk_size             = 20
+sql_disk_autoresize_limit = 50
+sql_backup_retention_days = 3
+db_name                   = "student_registration"
+db_username               = "studentadmin"
+db_password               = "CHANGE_ME_STRONG_PASSWORD"
+
+# Alerts (Cloud Monitoring -> email). Thresholds are fractions: 0.8 = 80 %
+alert_email              = "your-email@example.com"
+cpu_alert_threshold      = 0.8
+sql_disk_alert_threshold = 0.85
+
+# Set true for anything you want protected from an accidental terraform destroy
+deletion_protection = false

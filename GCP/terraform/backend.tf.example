@@ -1,0 +1,10 @@
+# Optional: remote state in Cloud Storage. Create the bucket first, then copy this file to backend.tf:
+#
+#   gcloud storage buckets create gs://YOUR_PROJECT_ID-tfstate --location=asia-south1 --uniform-bucket-level-access
+#   gcloud storage buckets update gs://YOUR_PROJECT_ID-tfstate --versioning
+terraform {
+  backend "gcs" {
+    bucket = "YOUR_PROJECT_ID-tfstate"
+    prefix = "student-registration/dev"
+  }
+}
