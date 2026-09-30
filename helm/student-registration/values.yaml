@@ -1,0 +1,48 @@
+namespace: student-registration
+
+# Set true only when installing with the Helm CLI into a namespace that does not exist yet.
+# Argo CD creates the namespace itself (CreateNamespace=true in argocd/student-registration.yaml).
+createNamespace: false
+
+backend:
+  replicaCount: 2
+
+  image:
+    # Replace YOUR_GCP_PROJECT_ID once. After that, the Jenkins pipeline rewrites repository and tag on every build.
+    repository: asia-south1-docker.pkg.dev/YOUR_GCP_PROJECT_ID/student-registration/backend
+    tag: "latest"
+    pullPolicy: Always
+
+  # Kubernetes Secret holding DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD (see helm/db-secret.example.yaml)
+  dbSecretName: student-registration-db-secret
+
+  service:
+    type: ClusterIP
+    port: 8080
+
+frontend:
+  replicaCount: 2
+
+  image:
+    repository: asia-south1-docker.pkg.dev/YOUR_GCP_PROJECT_ID/student-registration/frontend
+    tag: "latest"
+    pullPolicy: Always
+
+  service:
+    type: ClusterIP
+    port: 80
+
+ingress:
+  enabled: true
+
+  # Name of the global static IP reserved by Terraform (terraform output ingress_static_ip_name).
+  # It is "<project_name>-<environment>-ingress-ip"; change this if you changed those Terraform variables.
+  # Set to "" to use an ephemeral IP instead.
+  staticIpName: "student-registration-dev-ingress-ip"
+
+monitoring:
+  # Google Cloud Managed Service for Prometheus: scrapes /actuator/prometheus on the backend pods.
+  # Needs managed collection enabled on the cluster (Terraform enables it).
+  podMonitoring:
+    enabled: true
+    interval: 30s

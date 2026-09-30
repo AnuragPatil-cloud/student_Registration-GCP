@@ -1,0 +1,33 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: student-registration-ingress
+  namespace: {{ .Values.namespace }}
+  annotations:
+    # GKE Ingress classes are selected with this annotation (spec.ingressClassName is not supported on GKE).
+    # "gce" = external Application Load Balancer.
+    kubernetes.io/ingress.class: "gce"
+{{- if .Values.ingress.staticIpName }}
+    kubernetes.io/ingress.global-static-ip-name: {{ .Values.ingress.staticIpName | quote }}
+{{- end }}
+spec:
+  rules:
+    - http:
+        paths:
+          # GKE matches "/api/*" with ImplementationSpecific; the longest matching path wins over "/*".
+          - path: /api/*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: student-registration-backend
+                port:
+                  number: {{ .Values.backend.service.port }}
+          - path: /*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: student-registration-frontend
+                port:
+                  number: {{ .Values.frontend.service.port }}
+{{- end }}
