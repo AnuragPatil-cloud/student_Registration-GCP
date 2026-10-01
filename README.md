@@ -2,9 +2,26 @@
 
 A cloud-native **Student Registration** application built with **React + Spring Boot + MySQL**, containerized with Docker, deployed on **Google Kubernetes Engine (GKE)**, provisioned with **Terraform**, automated end-to-end through a **Jenkins CI/CD pipeline** (with SonarQube analysis), stored in **Artifact Registry**, and released via **Helm** and **GitOps with Argo CD**.
 
-This repo is a mini reference architecture for shipping a simple CRUD app the "real" DevOps way — IaC → CI → CD → GitOps → Observability — on Google Cloud.
+This repo is a mini reference architecture for shipping a simple CRUD app the "real" DevOps way — **IaC → CI → CD → GitOps → Observability** — on Google Cloud.
 
-![Student Registration app](./screenshots/student-app.png)
+<p align="center">
+  <img src="./screenshots/student-app.png" alt="Student Registration application" width="850">
+</p>
+
+<p align="center">
+  <img alt="Java 17" src="https://img.shields.io/badge/Java-17-orange?logo=openjdk&logoColor=white">
+  <img alt="Spring Boot 3.3.5" src="https://img.shields.io/badge/Spring%20Boot-3.3.5-6DB33F?logo=springboot&logoColor=white">
+  <img alt="React 18" src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black">
+  <img alt="Vite" src="https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white">
+  <img alt="MySQL 8.4" src="https://img.shields.io/badge/Cloud%20SQL-MySQL%208.4-4479A1?logo=mysql&logoColor=white">
+  <img alt="Docker" src="https://img.shields.io/badge/Docker-multi--stage-2496ED?logo=docker&logoColor=white">
+  <img alt="Google GKE" src="https://img.shields.io/badge/Google%20Cloud-GKE-4285F4?logo=googlecloud&logoColor=white">
+  <img alt="Terraform" src="https://img.shields.io/badge/Terraform-7B42BC?logo=terraform&logoColor=white">
+  <img alt="Jenkins" src="https://img.shields.io/badge/CI-Jenkins-D24939?logo=jenkins&logoColor=white">
+  <img alt="SonarQube" src="https://img.shields.io/badge/SonarQube-4E9BCD?logo=sonarqube&logoColor=white">
+  <img alt="Helm" src="https://img.shields.io/badge/Helm-0F1689?logo=helm&logoColor=white">
+  <img alt="Argo CD" src="https://img.shields.io/badge/GitOps-Argo%20CD-EF7B4D?logo=argo&logoColor=white">
+</p>
 
 ---
 
@@ -15,6 +32,7 @@ This repo is a mini reference architecture for shipping a simple CRUD app the "r
 - [Tech Stack](#-tech-stack)
 - [Features](#-features)
 - [Project Structure](#-project-structure)
+- [Infrastructure (Terraform)](#-infrastructure-terraform)
 - [CI/CD Pipeline](#-cicd-pipeline)
 - [Screenshots](#-screenshots)
 - [Getting Started Locally](#-getting-started-locally)
@@ -29,15 +47,15 @@ This repo is a mini reference architecture for shipping a simple CRUD app the "r
 
 ## 🧭 Overview
 
-A student submits registration details (name, email, course, education, percentage, branch, mobile number) through a React form. The data is persisted in a MySQL database (Cloud SQL) via a Spring Boot REST API, and can be listed or deleted from the same UI.
+A student submits registration details (name, email, course, education, percentage, branch, mobile number) through a React form. The data is persisted in a **Cloud SQL for MySQL** database via a Spring Boot REST API, and can be listed or deleted from the same UI.
 
 What makes this project interesting is everything around the app:
 
-- **Infrastructure as Code** with Terraform — custom VPC, Cloud NAT, private GKE cluster with an autoscaling node pool, Cloud SQL for MySQL (private IP), Artifact Registry, a Jenkins VM, IAM and Cloud Monitoring alerts
+- **Infrastructure as Code** with Terraform — custom VPC, Cloud NAT, a private GKE cluster with an autoscaling node pool, Cloud SQL for MySQL (private IP), Artifact Registry, a Jenkins VM, IAM and Cloud Monitoring alerts
 - **Containerized** frontend and backend with multi-stage Docker builds
 - **CI** with Jenkins — test → static code analysis → build → dockerize → push to Artifact Registry → update Helm values
 - **CD** with a Helm chart + Argo CD for GitOps-style automated sync to the cluster
-- **Ingress** via the built-in GKE Ingress controller (external Application Load Balancer, static IP)
+- **Ingress** via the built-in GKE Ingress controller (external Application Load Balancer, global static IP)
 - **Observability** via Cloud Logging, Google Cloud Managed Service for Prometheus (scrapes the backend's `/actuator/prometheus`) and Cloud Monitoring alerts
 
 > This is the GCP edition of the project, ported from the AWS/EKS build. The application code and UI are unchanged except for the database driver (MariaDB → MySQL, see [AWS → GCP Service Mapping](#-aws--gcp-service-mapping)); the infrastructure, pipeline and deployment layer are rebuilt for Google Cloud.
@@ -46,48 +64,41 @@ What makes this project interesting is everything around the app:
 
 ## 🏗 Architecture
 
+### Delivery flow
+
+```mermaid
+flowchart LR
+    dev([Developer]) -->|git push| gh[(GitHub)]
+    gh -->|checkout| jk["Jenkins<br/>Compute Engine VM"]
+    jk --> t["Maven test<br/>SonarQube<br/>npm build"]
+    t --> img["Docker build<br/>backend + frontend"]
+    img -->|"VM service account"| ar[("Artifact Registry")]
+    jk -->|"commit image tag<br/>to helm/values.yaml"| gh
+    gh -->|"Argo CD watches<br/>helm/student-registration"| argo["Argo CD<br/>auto-sync"]
+    argo --> gke["GKE cluster"]
+    ar -.->|"image pull<br/>(node service account)"| gke
 ```
-                         ┌─────────────────────────────────────────────┐
-                         │                   GitHub                     │
-                         │        (app code + Helm chart source)        │
-                         └───────────────────┬───────────────────────────┘
-                                              │ webhook / poll
-                                              ▼
-                         ┌─────────────────────────────────────────────┐
-                         │          Jenkins (Compute Engine VM)         │
-                         │  Checkout → Test → SonarQube → Build         │
-                         │  → Docker Build/Push → Update Helm values    │
-                         │  → Commit & Push (GitOps trigger)            │
-                         └───────────────────┬───────────────────────────┘
-                                              │ image push (VM service account)
-                                              ▼
-                         ┌─────────────────────────────────────────────┐
-                         │               Artifact Registry              │
-                         │   <region>-docker.pkg.dev/<project>/         │
-                         │   student-registration/{backend,frontend}    │
-                         └───────────────────┬───────────────────────────┘
-                                              │ image pull (node service account)
-                                              ▼
-                         ┌─────────────────────────────────────────────┐
-                         │                  Argo CD                     │
-                         │ Watches helm/student-registration → auto sync│
-                         └───────────────────┬───────────────────────────┘
-                                              ▼
-   ┌────────────────────────── Google Cloud (Terraform-provisioned) ───────────────────────┐
-   │                                                                                         │
-   │   VPC (VM subnet, GKE subnet + Pod/Service ranges, Cloud Router + Cloud NAT)            │
-   │                                                                                         │
-   │   ┌────────────────────── GKE cluster (private nodes) ────────────────────┐            │
-   │   │                                                                         │            │
-   │   │   GKE Ingress ──▶ /api/*  ▶ backend Service  ▶ backend Pods (Spring)   │            │
-   │   │   (external ALB,  │                                  │                 │            │
-   │   │    static IP)     └▶ /*    ▶ frontend Service ▶ frontend Pods (React)  │            │
-   │   └────────────────────────────────────┬────────────────────────────────────┘           │
-   │                                        ▼   (Private Service Access)                     │
-   │                              Cloud SQL for MySQL (private IP only)                      │
-   │                                                                                         │
-   │   Cloud Logging · Managed Prometheus · Cloud Monitoring alerts (email)                  │
-   └─────────────────────────────────────────────────────────────────────────────────────────┘
+
+### Runtime on Google Cloud
+
+```mermaid
+flowchart TB
+    user([Browser]) --> lb["GKE Ingress<br/>external Application Load Balancer<br/>global static IP"]
+
+    subgraph vpc["Custom VPC (Terraform) · asia-south1"]
+        subgraph gke["GKE cluster · private nodes · Cloud NAT egress"]
+            lb -->|"/*"| fe["frontend Service<br/>React on Apache httpd"]
+            lb -->|"/api/*"| be["backend Service<br/>Spring Boot :8080"]
+            fe --> fep["frontend Pods x2"]
+            be --> bep["backend Pods x2"]
+        end
+        sql[("Cloud SQL for MySQL 8.4<br/>private IP only")]
+        bep -->|"Private Service Access"| sql
+    end
+
+    bep -.->|"/actuator/prometheus"| mp["Managed Service<br/>for Prometheus"]
+    mp --> cm["Cloud Monitoring<br/>alert policies → email"]
+    gke -.-> cl["Cloud Logging"]
 ```
 
 The browser only talks to one address. The Ingress splits traffic by path: `/api/*` goes to the Spring Boot backend, everything else to the React frontend (served by Apache httpd). The frontend is built with `VITE_API_URL=/api`.
@@ -118,6 +129,7 @@ The browser only talks to one address. The Ingress splits traffic by path: `/api
 - 📋 Live table of all registered students
 - 🗑️ Delete a registered student record
 - 🔌 REST API (`/api/register`, `/api/users`, `/api/users/{id}`) backed by MySQL
+- ❤️ Health and metrics endpoints via Spring Boot Actuator (`/actuator/health`, `/actuator/prometheus`)
 - 🐳 Fully dockerized frontend (Apache httpd serving the Vite build) and backend (JRE Alpine image)
 - ☸️ Kubernetes-native deployment via Helm (Deployments, Services, Ingress, PodMonitoring)
 - 🔁 GitOps delivery — Argo CD auto-syncs whatever is committed to `helm/student-registration`
@@ -163,11 +175,29 @@ student_Registration-GCP/
 │   └── scripts/jenkins-startup.sh
 │
 ├── scripts/update-helm-values.sh # used by Jenkins to bump image repo/tag in values.yaml
-├── screenshots/                  # App screenshot
+├── screenshots/                  # Screenshots used in this README
 ├── Jenkinsfile                   # CI/CD pipeline definition
 ├── compose.yml                   # docker compose for local dev (MySQL + backend + frontend)
 └── README.md
 ```
+
+---
+
+## 🧱 Infrastructure (Terraform)
+
+Everything under [`GCP/terraform`](./GCP/terraform) is created with one `terraform apply`. Defaults target the **`asia-south1` (Mumbai)** region.
+
+| File | Provisions |
+|---|---|
+| `apis.tf` | Enables the Google APIs the project needs |
+| `vpc.tf` · `nat.tf` | Custom VPC, a VM subnet and a GKE subnet with Pod/Service secondary ranges, Cloud Router + Cloud NAT |
+| `firewall.tf` | Admin-IP-only rules for Jenkins, SonarQube and SSH (SSH also through IAP) |
+| `iam.tf` | Service accounts for the Jenkins VM and GKE nodes, with Artifact Registry access granted on the repository only — no keys |
+| `artifact-registry.tf` | Docker repository holding the `backend` and `frontend` images |
+| `jenkins.tf` | Jenkins + SonarQube VM (`e2-standard-2`, 40 GB disk) bootstrapped by `scripts/jenkins-startup.sh` |
+| `gke.tf` | GKE cluster on the `REGULAR` release channel: private nodes, Workload Identity, managed Prometheus, and an autoscaling node pool of `e2-standard-2` nodes (2 initial, 1–3 range) |
+| `cloudsql.tf` | Cloud SQL for MySQL 8.4 (`db-g1-small`), private IP only via Private Service Access, automated backups |
+| `monitoring.tf` | Email notification channel and alert policies: Jenkins VM CPU, Cloud SQL CPU, Cloud SQL disk |
 
 ---
 
@@ -196,12 +226,15 @@ No Google Cloud keys are stored in Jenkins: the Jenkins VM runs as a Terraform-c
 
 ### Application
 
-![Student Registration app](./screenshots/student-app.png)
+<p align="center">
+  <img src="./screenshots/student-app.png" alt="Student Registration application running on GKE" width="850">
+</p>
 
 <!--
-  After you deploy, add your own GCP screenshots here (terraform apply output, GKE workloads, Cloud SQL,
-  Jenkins pipeline + SonarQube, Artifact Registry images, Ingress / load balancer, Cloud Logging,
-  Managed Prometheus metrics) and reference them like the one above.
+  Add GCP screenshots here as you capture them, then reference them like the one above:
+  terraform apply output, GKE workloads, Cloud SQL instance, Jenkins pipeline + SonarQube,
+  Artifact Registry images, Argo CD application, Ingress / load balancer, Cloud Logging,
+  Managed Prometheus metrics, Cloud Monitoring alert policies.
 -->
 
 ---
@@ -411,4 +444,6 @@ Other deliberate differences: the Helm Ingress uses the `kubernetes.io/ingress.c
 ## 👤 Author
 
 **Anurag Patil**
+
 - GitHub: [AnuragPatil-cloud](https://github.com/AnuragPatil-cloud)
+- LinkedIn: [linkedin.com/in/anuragpatil17](https://www.linkedin.com/in/anuragpatil17)
